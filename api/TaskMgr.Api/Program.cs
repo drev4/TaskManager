@@ -19,6 +19,12 @@ try
     builder.Services.AddApiDocumentation();
     builder.Services.AddLoggingServices(builder.Configuration);
     builder.Services.AddHealthCheckServices(builder.Configuration);
+
+    // Add MediatR
+    builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+    
+    // Add SignalR
+    builder.Services.AddSignalR();
     builder.Services.AddCorsServices(builder.Configuration);
     builder.Services.AddCachingServices(builder.Configuration);
     builder.Services.AddApiVersioningServices();
@@ -91,6 +97,7 @@ try
 
     // Map endpoints
     app.MapControllers();
+    app.MapHub<TaskMgr.Api.Infrastructure.Hubs.TaskHub>("/hubs/task");
     app.MapHealthChecks("/health");
     app.MapHealthChecks("/health/ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
     {
