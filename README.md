@@ -1,264 +1,129 @@
 # TaskManager
 
-A modern, full-stack task management platform built with .NET 8 and Vue 3. This application helps teams organize projects, track tasks, and collaborate effectively with a clean, intuitive interface.
+A full-stack task and project management application built with .NET 8 and Vue 3. It covers project/task CRUD, time tracking, dashboard analytics, and live updates over SignalR.
 
-## Features
+This is a personal project used to practice and demonstrate a Clean Architecture / CQRS backend paired with a typed Vue 3 frontend, rather than a from-scratch business product.
 
-- **Project Management**: Create and organize projects with color coding and due dates
-- **Task Tracking**: Comprehensive task management with status, priority, assignments, and time tracking
-- **Dashboard Analytics**: Real-time statistics and insights into project progress
-- **User Management**: Multi-user support with role-based access
-- **Time Tracking**: Estimate and track actual hours spent on tasks
-- **Filtering & Search**: Advanced filtering and search capabilities
-- **Responsive Design**: Modern, mobile-friendly UI built with Tailwind CSS
+## Tech stack and why
 
-## Tech Stack
+**.NET 8 / ASP.NET Core** — statically typed, mature ecosystem, and the framework I have the most production experience with. Minimal API overhead isn't a priority here; a controller-based Web API keeps the project structure familiar to anyone coming from an enterprise .NET background.
 
-### Backend
-- **.NET 8**: Modern, high-performance web API
-- **Entity Framework Core 8**: Database access and migrations
-- **SQL Server**: Relational database (with LocalDB support for development)
-- **Clean Architecture**: Domain-Driven Design (DDD) with CQRS pattern
-- **AutoMapper**: Object-to-object mapping
-- **FluentValidation**: Input validation
-- **Serilog**: Structured logging
-- **Swagger/OpenAPI**: API documentation
+**Clean Architecture (Domain / Application / Infrastructure / API)** — keeps EF Core and SignalR out of the domain layer so business rules (e.g. task status transitions) can be unit tested without spinning up a database.
 
-### Frontend
-- **Vue 3**: Progressive JavaScript framework with Composition API
-- **TypeScript**: Type-safe development
-- **Vite**: Fast build tool and dev server
-- **Pinia**: State management
-- **Vue Router 4**: Client-side routing
-- **Tailwind CSS**: Utility-first CSS framework
-- **Axios**: HTTP client
-- **Heroicons**: Beautiful hand-crafted SVG icons
+**MediatR (CQRS) + domain events** — commands like `CreateTask` go through a handler pipeline instead of being inlined in controllers, and side effects (e.g. notifying a SignalR hub when a task is created) live in a separate `TaskCreatedEventHandler` rather than being bolted onto the command itself. This keeps the "create a task" use case focused on one thing and makes it easy to add more reactions to the same event later.
 
-### Infrastructure
-- **Azure AD B2C**: Authentication (optional, can be enabled later)
-- **Azure SQL Database**: Production database
-- **Azure App Service**: Hosting
-- **Bicep**: Infrastructure as Code
+**Entity Framework Core + SQL Server** — code-first migrations were the fastest way to iterate on the schema, and SQL Server LocalDB removes any setup friction for local development. A repository/unit-of-work layer sits on top so the application layer doesn't depend on `DbContext` directly.
 
-## Project Structure
+**SignalR** — the dashboard needs to reflect task changes without polling; a hub pushes updates to connected clients when tasks are created or change status.
+
+**FluentValidation over Data Annotations** — validation rules for DTOs (e.g. conditional rules, cross-field checks) get complex quickly, and FluentValidation keeps them out of the model classes and independently testable.
+
+**Serilog + OpenTelemetry + health checks** — structured logging and traces are what actually get used when something breaks in a deployed environment; console logging alone isn't enough to reason about latency or correlate requests.
+
+**Redis (output/response caching) + Hangfire** — added for read-heavy dashboard queries and for background/recurring jobs (e.g. periodic aggregation), so the request pipeline isn't doing that work synchronously.
+
+**Vue 3 + TypeScript + Composition API** — smaller mental model than React for this size of app, and the Composition API keeps related state and logic (e.g. the `useSignalR` composable) together instead of scattered across lifecycle hooks.
+
+**Pinia** — the currently recommended store for Vue 3; simpler API and better TypeScript inference than Vuex.
+
+**Tailwind CSS** — avoids maintaining a separate stylesheet per component for a UI this size; utility classes are also easier to keep consistent across a small team or solo project.
+
+**Azure AD B2C (optional)** — the API is wired for it via `Microsoft.Identity.Web`, but it's disabled by default in local development in favor of a mock user, so the app can be cloned and run without an Azure tenant.
+
+## Architecture
+
+```
+Domain            Entities, domain events, enums, repository interfaces
+Application       Commands/queries (MediatR), DTOs, validators, AutoMapper profiles, event handlers
+Infrastructure     EF Core repositories, SignalR hubs, external services
+Controllers        Thin HTTP layer that only translates requests into MediatR commands/queries
+```
+
+Dependencies point inward: Domain has no dependency on Infrastructure or EF Core.
+
+## Project layout
 
 ```
 TaskManager/
-├── api/                          # Backend .NET API
-│   └── TaskMgr.Api/
-│       ├── Application/          # Application layer (DTOs, Services, Validators)
-│       ├── Controllers/          # API Controllers
-│       ├── Data/                 # Database context and migrations
-│       ├── Domain/               # Domain layer (Entities, Interfaces, Enums)
-│       └── Infrastructure/       # Infrastructure layer (Repositories, Services)
+├── api/TaskMgr.Api/
+│   ├── Application/       # Commands, DTOs, validators, mappings, event handlers
+│   ├── Controllers/       # API controllers
+│   ├── Data/               # DbContext and EF Core migrations
+│   ├── Domain/             # Entities, domain events, enums, repository interfaces
+│   └── Infrastructure/     # Repository implementations, SignalR hubs
 │
-├── frontend/                     # Frontend Vue 3 application
-│   ├── src/
-│   │   ├── assets/              # Static assets and styles
-│   │   ├── auth/                # Authentication configuration
-│   │   ├── components/          # Reusable Vue components
-│   │   ├── composables/         # Vue composables (hooks)
-│   │   ├── layouts/             # Layout components
-│   │   ├── pages/               # Page components
-│   │   ├── router/              # Vue Router configuration
-│   │   ├── stores/              # Pinia stores
-│   │   └── types/               # TypeScript type definitions
-│   └── package.json
+├── frontend/
+│   └── src/
+│       ├── components/     # Reusable Vue components
+│       ├── composables/    # e.g. useSignalR
+│       ├── pages/          # Route-level views
+│       ├── router/
+│       ├── stores/         # Pinia stores
+│       └── types/
 │
-└── infrastructure/               # Azure infrastructure (Bicep templates)
+└── infra/                  # Azure infrastructure (Bicep)
 ```
 
-## Getting Started
+## Getting started
 
 ### Prerequisites
 
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
 - [Node.js 18+](https://nodejs.org/)
-- [SQL Server LocalDB](https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/sql-server-express-localdb) (for development)
-- [Git](https://git-scm.com/)
-
-### Local Development Setup
-
-#### 1. Clone the Repository
-
-```bash
-git clone <repository-url>
-cd TaskManager
-```
-
-#### 2. Backend Setup
-
-```bash
-# Navigate to API project
-cd api/TaskMgr.Api
-
-# Restore dependencies
-dotnet restore
-
-# Apply database migrations
-dotnet ef database update
-
-# (Optional) Seed test data
-sqlcmd -S "(localdb)\mssqllocaldb" -d TaskMgrDb -i Data/seed-data.sql
-
-# Run the API
-dotnet run
-```
-
-The API will be available at:
-- HTTP: http://localhost:65454
-- HTTPS: https://localhost:65453
-
-Swagger documentation: http://localhost:65454/swagger
-
-#### 3. Frontend Setup
-
-```bash
-# Navigate to frontend
-cd frontend
-
-# Install dependencies
-npm install
-
-# Create environment file
-cp .env.example .env
-
-# Update .env with your settings:
-# VITE_API_BASE_URL=http://localhost:65454
-
-# Run development server
-npm run dev
-```
-
-The frontend will be available at http://localhost:3001
-
-### Database Setup
-
-The project uses SQL Server LocalDB for development. The connection string is configured in `appsettings.Development.json`.
-
-#### Create Database and Apply Migrations
-
-```bash
-cd api/TaskMgr.Api
-dotnet ef database update
-```
-
-#### Seed Test Data
-
-The `Data/seed-data.sql` script creates:
-- 3 test users (John Doe, Jane Smith, Bob Wilson)
-- 4 projects with various statuses
-- 18 tasks across different projects
-
-```bash
-sqlcmd -S "(localdb)\mssqllocaldb" -d TaskMgrDb -i Data/seed-data.sql
-```
-
-### Development Mode (Without Authentication)
-
-For local development, authentication is disabled by default. The application uses a mock user (Bob Wilson) to allow testing without Azure AD B2C setup.
-
-When you're ready to enable authentication:
-1. Configure Azure AD B2C tenant
-2. Update `.env` with B2C settings
-3. Uncomment `[Authorize]` attributes in controllers
-4. Update `GetCurrentUserId()` methods to remove mock user logic
-5. Uncomment authentication initialization in `App.vue` and `router/index.ts`
-
-## Testing
-
-### Test Users (Seed Data)
-
-- **John Doe**: john.doe@example.com
-- **Jane Smith**: jane.smith@example.com
-- **Bob Wilson**: bob.wilson@example.com
-
-### API Endpoints
-
-- **Projects**: `GET /api/projects`
-- **Tasks**: `GET /api/tasks`
-- **Dashboard**: `GET /api/dashboard/stats`
-- **Users**: `GET /api/users`
-
-Full API documentation available at `/swagger` when running the backend.
-
-## Building for Production
+- [SQL Server LocalDB](https://learn.microsoft.com/en-us/sql/database-engine/configure-windows/sql-server-express-localdb)
+- Git
 
 ### Backend
 
 ```bash
 cd api/TaskMgr.Api
-dotnet publish -c Release -o ./publish
+dotnet restore
+dotnet ef database update
+
+# optional: seed sample data
+sqlcmd -S "(localdb)\mssqllocaldb" -d TaskMgrDb -i Data/seed-data.sql
+
+dotnet run
 ```
+
+- API: http://localhost:65454 (https: 65453)
+- Swagger: http://localhost:65454/swagger
 
 ### Frontend
 
 ```bash
 cd frontend
-npm run build
+npm install
+cp .env.example .env   # set VITE_API_BASE_URL if it differs from the default
+npm run dev
 ```
 
-The production build will be in the `dist/` directory.
+Runs at http://localhost:3001.
+
+### Authentication in local development
+
+Azure AD B2C is disabled by default; the API uses a mock user (seeded as "Bob Wilson") so the app runs without an Azure tenant. To enable real auth: configure a B2C tenant, set the corresponding values in `.env`, uncomment the `[Authorize]` attributes in the controllers, and remove the mock-user fallback in `GetCurrentUserId()`.
+
+## Testing
+
+Backend:
+```bash
+cd api/TaskMgr.Api
+dotnet test
+```
+
+Frontend:
+```bash
+cd frontend
+npm run test        # vitest
+npm run type-check   # vue-tsc
+npm run lint
+```
 
 ## Deployment
 
-### Azure Deployment
-
-Infrastructure as Code templates are provided in the `infrastructure/` directory using Azure Bicep.
-
-```bash
-cd infrastructure
-az deployment group create \
-  --resource-group <your-resource-group> \
-  --template-file main.bicep \
-  --parameters @parameters.json
-```
-
-## Contributing
-
-1. Create a feature branch (`git checkout -b feature/amazing-feature`)
-2. Commit your changes (`git commit -m 'Add amazing feature'`)
-3. Push to the branch (`git push origin feature/amazing-feature`)
-4. Open a Pull Request
-
-## Architecture
-
-This project follows **Clean Architecture** principles with clear separation of concerns:
-
-- **Domain Layer**: Core business logic and entities
-- **Application Layer**: Use cases, DTOs, and business rules
-- **Infrastructure Layer**: Data access, external services
-- **Presentation Layer**: API controllers and responses
-
-### Key Patterns
-
-- **Repository Pattern**: Abstraction over data access
-- **Unit of Work**: Transaction management
-- **CQRS**: Separation of read and write operations
-- **Domain Events**: Decoupled domain logic
-- **Dependency Injection**: Loose coupling and testability
+See [DEPLOYMENT.md](DEPLOYMENT.md) for deploying to Azure with the Bicep templates in `infra/`.
 
 ## License
 
-This project is licensed under the MIT License.
-
-## Roadmap
-
-- [ ] Real-time notifications with SignalR
-- [ ] File attachments for tasks
-- [ ] Comments and activity feed
-- [ ] Gantt chart view
-- [ ] Calendar integration
-- [ ] Mobile app (React Native)
-- [ ] Advanced reporting and analytics
-- [ ] Team collaboration features
-- [ ] Email notifications
-- [ ] Recurring tasks
-
-## Support
-
-For issues, questions, or contributions, please open an issue on GitHub.
-
----
-
-Built with ❤️ using .NET 8 and Vue 3
+MIT

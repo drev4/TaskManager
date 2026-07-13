@@ -5,6 +5,9 @@ using TaskMgr.Api.Application.DTOs;
 using TaskMgr.Api.Application.Services;
 using FluentValidation;
 
+using MediatR;
+using TaskMgr.Api.Application.Tasks.Commands.CreateTask;
+
 namespace TaskMgr.Api.Controllers;
 
 /// <summary>
@@ -19,6 +22,7 @@ namespace TaskMgr.Api.Controllers;
 public class TasksController : ControllerBase
 {
     private readonly TaskService _taskService;
+    private readonly ISender _sender;
     private readonly IValidator<CreateTaskDto> _createValidator;
     private readonly IValidator<UpdateTaskDto> _updateValidator;
     private readonly ILogger<TasksController> _logger;
@@ -27,16 +31,19 @@ public class TasksController : ControllerBase
     /// Initializes a new instance of the TasksController
     /// </summary>
     /// <param name="taskService">Task service</param>
+    /// <param name="sender">MediatR sender</param>
     /// <param name="createValidator">Create task validator</param>
     /// <param name="updateValidator">Update task validator</param>
     /// <param name="logger">Logger instance</param>
     public TasksController(
         TaskService taskService,
+        ISender sender,
         IValidator<CreateTaskDto> createValidator,
         IValidator<UpdateTaskDto> updateValidator,
         ILogger<TasksController> logger)
     {
         _taskService = taskService ?? throw new ArgumentNullException(nameof(taskService));
+        _sender = sender ?? throw new ArgumentNullException(nameof(sender));
         _createValidator = createValidator ?? throw new ArgumentNullException(nameof(createValidator));
         _updateValidator = updateValidator ?? throw new ArgumentNullException(nameof(updateValidator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -154,7 +161,22 @@ public class TasksController : ControllerBase
         }
 
         var userId = GetCurrentUserId();
-        var task = await _taskService.CreateTaskAsync(createTaskDto, userId, cancellationToken);
+
+        // Use MediatR for CQRS
+        var command = new CreateTaskCommand
+        {
+            Title = createTaskDto.Title,
+            Description = createTaskDto.Description,
+            ProjectId = createTaskDto.ProjectId,
+            Priority = createTaskDto.Priority,
+            DueDate = createTaskDto.DueDate,
+            EstimatedHours = createTaskDto.EstimatedHours,
+            Tags = createTaskDto.Tags ?? new List<string>(),
+            AssignedToUserId = createTaskDto.AssignedToUserId,
+            UserId = userId
+        };
+
+        var task = await _sender.Send(command, cancellationToken);
 
         var response = new ApiResponseDto<TaskItemDto>
         {

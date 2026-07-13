@@ -1,0 +1,75 @@
+// TaskManager - Ultra Free Deployment (SQLite + Free App Service)
+param location string = resourceGroup().location
+
+// Variables
+var appName = 'taskmgr${uniqueString(resourceGroup().id)}'
+var storageName = 'taskmgrstorage${uniqueString(resourceGroup().id)}'
+
+// App Service Plan - FREE TIER
+resource appServicePlan 'Microsoft.Web/serverfarms@2022-03-01' = {
+  name: '${appName}-plan'
+  location: location
+  sku: {
+    name: 'F1'
+    tier: 'Free'
+    size: 'F1'
+    family: 'F'
+    capacity: 0
+  }
+  properties: {
+    reserved: false
+  }
+}
+
+// App Service - FREE TIER
+resource appService 'Microsoft.Web/sites@2022-03-01' = {
+  name: appName
+  location: location
+  properties: {
+    serverFarmId: appServicePlan.id
+    httpsOnly: true
+    siteConfig: {
+      netFrameworkVersion: 'v8.0'
+      scmType: 'None'
+      use32BitWorkerProcess: false
+      alwaysOn: false // Not available in Free tier
+      webSocketsEnabled: false
+      requestTracingEnabled: true
+      httpLoggingEnabled: true
+      logsDirectorySizeLimit: 40
+      detailedErrorLoggingEnabled: true
+      appSettings: [
+        {
+          name: 'ASPNETCORE_ENVIRONMENT'
+          value: 'Production'
+        }
+        {
+          name: 'WEBSITE_RUN_FROM_PACKAGE'
+          value: '1'
+        }
+        {
+          name: 'DATABASE_TYPE'
+          value: 'SQLite'
+        }
+      ]
+    }
+  }
+}
+
+// Storage Account - Hot tier (minimal cost)
+resource storage 'Microsoft.Storage/storageAccounts@2023-01-01' = {
+  name: storageName
+  location: location
+  sku: { name: 'Standard_LRS' }
+  kind: 'StorageV2'
+  properties: {
+    accessTier: 'Hot'
+    allowBlobPublicAccess: false
+    supportsHttpsTrafficOnly: true
+  }
+}
+
+// Outputs
+output appServiceName string = appService.name
+output appServiceUrl string = 'https://${appService.properties.defaultHostName}'
+output storageAccountName string = storage.name
