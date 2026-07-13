@@ -135,6 +135,7 @@ Thumbs.db
 *.pubxml
 *.publishsettings
 PublishScripts/
+infra/main.parameters.json
 
 # Logs
 logs

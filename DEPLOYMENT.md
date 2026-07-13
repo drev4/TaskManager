@@ -54,7 +54,11 @@ dotnet ef database update
 
 ## Configuration
 
-SQL admin credentials are set in `infra/main.parameters.json` — replace the placeholder values before deploying; don't reuse them across environments.
+`infra/main.parameters.json` is gitignored since it holds the SQL admin credentials. Copy the example and fill in real values before deploying:
+
+```bash
+cp infra/main.parameters.example.json infra/main.parameters.json
+```
 
 App Service gets `ASPNETCORE_ENVIRONMENT=Production` and `ConnectionStrings__DefaultConnection` set automatically from the deployment.
 
