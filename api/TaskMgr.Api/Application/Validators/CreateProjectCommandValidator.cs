@@ -1,17 +1,14 @@
 using FluentValidation;
-using TaskMgr.Api.Application.DTOs;
+using TaskMgr.Api.Application.Projects.Commands.CreateProject;
 
 namespace TaskMgr.Api.Application.Validators;
 
 /// <summary>
-/// Validator for CreateProjectDto
+/// Validator for CreateProjectCommand
 /// </summary>
-public class CreateProjectValidator : AbstractValidator<CreateProjectDto>
+public class CreateProjectCommandValidator : AbstractValidator<CreateProjectCommand>
 {
-    /// <summary>
-    /// Initializes validation rules for creating a project
-    /// </summary>
-    public CreateProjectValidator()
+    public CreateProjectCommandValidator()
     {
         RuleFor(x => x.Name)
             .NotEmpty()

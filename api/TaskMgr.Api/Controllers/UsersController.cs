@@ -1,9 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using MediatR;
 using TaskMgr.Api.Application.DTOs;
-using TaskMgr.Api.Domain.Interfaces;
-using AutoMapper;
+using TaskMgr.Api.Application.Users.Commands.InitializeUser;
+using TaskMgr.Api.Application.Users.Commands.UpdateUserProfile;
+using TaskMgr.Api.Application.Users.Queries.GetActiveUsers;
+using TaskMgr.Api.Application.Users.Queries.GetCurrentUser;
+using TaskMgr.Api.Application.Users.Queries.GetUserById;
 
 namespace TaskMgr.Api.Controllers;
 
@@ -18,20 +22,17 @@ namespace TaskMgr.Api.Controllers;
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
 public class UsersController : ControllerBase
 {
-    private readonly IUserService _userService;
-    private readonly IMapper _mapper;
+    private readonly ISender _sender;
     private readonly ILogger<UsersController> _logger;
 
     /// <summary>
     /// Initializes a new instance of the UsersController
     /// </summary>
-    /// <param name="userService">User service</param>
-    /// <param name="mapper">AutoMapper instance</param>
+    /// <param name="sender">MediatR sender</param>
     /// <param name="logger">Logger instance</param>
-    public UsersController(IUserService userService, IMapper mapper, ILogger<UsersController> logger)
+    public UsersController(ISender sender, ILogger<UsersController> logger)
     {
-        _userService = userService ?? throw new ArgumentNullException(nameof(userService));
-        _mapper = mapper ?? throw new ArgumentNullException(nameof(mapper));
+        _sender = sender ?? throw new ArgumentNullException(nameof(sender));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -47,7 +48,7 @@ public class UsersController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var azureObjectId = GetCurrentUserAzureObjectId();
-        var user = await _userService.GetUserByAzureObjectIdAsync(azureObjectId, cancellationToken);
+        var user = await _sender.Send(new GetCurrentUserQuery { AzureObjectId = azureObjectId }, cancellationToken);
 
         if (user == null)
         {
@@ -60,10 +61,9 @@ public class UsersController : ControllerBase
             });
         }
 
-        var userDto = _mapper.Map<UserDto>(user);
         return Ok(new ApiResponseDto<UserDto>
         {
-            Data = userDto,
+            Data = user,
             Success = true,
             Message = "User profile retrieved successfully"
         });
@@ -84,7 +84,7 @@ public class UsersController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var azureObjectId = GetCurrentUserAzureObjectId();
-        var user = await _userService.GetUserByAzureObjectIdAsync(azureObjectId, cancellationToken);
+        var user = await _sender.Send(new GetCurrentUserQuery { AzureObjectId = azureObjectId }, cancellationToken);
 
         if (user == null)
         {
@@ -97,17 +97,17 @@ public class UsersController : ControllerBase
             });
         }
 
-        var updatedUser = await _userService.UpdateUserProfileAsync(
-            user.Id,
-            updateUserDto.DisplayName,
-            updateUserDto.Avatar,
-            updateUserDto.PreferredLanguage,
-            cancellationToken);
+        var updatedUser = await _sender.Send(new UpdateUserProfileCommand
+        {
+            UserId = user.Id,
+            DisplayName = updateUserDto.DisplayName,
+            Avatar = updateUserDto.Avatar,
+            PreferredLanguage = updateUserDto.PreferredLanguage
+        }, cancellationToken);
 
-        var userDto = _mapper.Map<UserDto>(updatedUser);
         return Ok(new ApiResponseDto<UserDto>
         {
-            Data = userDto,
+            Data = updatedUser,
             Success = true,
             Message = "User profile updated successfully"
         });
@@ -123,14 +123,13 @@ public class UsersController : ControllerBase
     public async Task<ActionResult<ApiResponseDto<List<UserDto>>>> GetActiveUsers(
         CancellationToken cancellationToken = default)
     {
-        var users = await _userService.GetActiveUsersAsync(cancellationToken);
-        var userDtos = _mapper.Map<List<UserDto>>(users);
+        var users = await _sender.Send(new GetActiveUsersQuery(), cancellationToken);
 
         return Ok(new ApiResponseDto<List<UserDto>>
         {
-            Data = userDtos,
+            Data = users,
             Success = true,
-            Message = $"Retrieved {userDtos.Count} active users"
+            Message = $"Retrieved {users.Count} active users"
         });
     }
 
@@ -161,23 +160,21 @@ public class UsersController : ControllerBase
             });
         }
 
-        var existingUser = await _userService.GetUserByAzureObjectIdAsync(azureObjectId, cancellationToken);
-        bool isNewUser = existingUser == null;
+        var result = await _sender.Send(new InitializeUserCommand
+        {
+            AzureObjectId = azureObjectId,
+            Email = email,
+            DisplayName = displayName
+        }, cancellationToken);
 
-        var user = await _userService.GetOrCreateUserAsync(azureObjectId, email, displayName, cancellationToken);
-
-        // Record login
-        await _userService.RecordUserLoginAsync(azureObjectId, cancellationToken);
-
-        var userDto = _mapper.Map<UserDto>(user);
         var response = new ApiResponseDto<UserDto>
         {
-            Data = userDto,
+            Data = result.User,
             Success = true,
-            Message = isNewUser ? "User account created successfully" : "User account updated successfully"
+            Message = result.IsNew ? "User account created successfully" : "User account updated successfully"
         };
 
-        return isNewUser ? StatusCode(StatusCodes.Status201Created, response) : Ok(response);
+        return result.IsNew ? StatusCode(StatusCodes.Status201Created, response) : Ok(response);
     }
 
     /// <summary>
@@ -193,7 +190,7 @@ public class UsersController : ControllerBase
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        var user = await _userService.GetUserByIdAsync(id, cancellationToken);
+        var user = await _sender.Send(new GetUserByIdQuery { UserId = id }, cancellationToken);
 
         if (user == null)
         {
@@ -206,10 +203,9 @@ public class UsersController : ControllerBase
             });
         }
 
-        var userDto = _mapper.Map<UserDto>(user);
         return Ok(new ApiResponseDto<UserDto>
         {
-            Data = userDto,
+            Data = user,
             Success = true,
             Message = "User retrieved successfully"
         });

@@ -1,0 +1,37 @@
+using AutoMapper;
+using MediatR;
+using TaskMgr.Api.Application.DTOs;
+using TaskMgr.Api.Domain.Interfaces;
+
+namespace TaskMgr.Api.Application.Tasks.Commands.RecordTaskTime;
+
+public class RecordTaskTimeCommandHandler : IRequestHandler<RecordTaskTimeCommand, TaskItemDto?>
+{
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IMapper _mapper;
+
+    public RecordTaskTimeCommandHandler(IUnitOfWork unitOfWork, IMapper mapper)
+    {
+        _unitOfWork = unitOfWork;
+        _mapper = mapper;
+    }
+
+    public async Task<TaskItemDto?> Handle(RecordTaskTimeCommand request, CancellationToken cancellationToken)
+    {
+        var task = await _unitOfWork.Tasks.GetSingleAsync(
+            t => t.Id == request.TaskId &&
+                 (t.Project.OwnerUserId == request.UserId || t.AssignedToUserId == request.UserId),
+            cancellationToken);
+
+        if (task == null)
+        {
+            return null;
+        }
+
+        task.RecordTimeSpent(request.Hours);
+        _unitOfWork.Tasks.Update(task);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return _mapper.Map<TaskItemDto>(task);
+    }
+}

@@ -1,9 +1,15 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using MediatR;
 using TaskMgr.Api.Application.DTOs;
-using TaskMgr.Api.Application.Services;
-using FluentValidation;
+using TaskMgr.Api.Application.Projects.Commands.ArchiveProject;
+using TaskMgr.Api.Application.Projects.Commands.CreateProject;
+using TaskMgr.Api.Application.Projects.Commands.DeleteProject;
+using TaskMgr.Api.Application.Projects.Commands.UnarchiveProject;
+using TaskMgr.Api.Application.Projects.Commands.UpdateProject;
+using TaskMgr.Api.Application.Projects.Queries.GetProjectById;
+using TaskMgr.Api.Application.Projects.Queries.GetProjects;
 
 namespace TaskMgr.Api.Controllers;
 
@@ -18,23 +24,19 @@ namespace TaskMgr.Api.Controllers;
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
 public class ProjectsController : ControllerBase
 {
-    private readonly ProjectService _projectService;
-    private readonly IValidator<CreateProjectDto> _createValidator;
+    private readonly ISender _sender;
     private readonly ILogger<ProjectsController> _logger;
 
     /// <summary>
     /// Initializes a new instance of the ProjectsController
     /// </summary>
-    /// <param name="projectService">Project service</param>
-    /// <param name="createValidator">Create project validator</param>
+    /// <param name="sender">MediatR sender</param>
     /// <param name="logger">Logger instance</param>
     public ProjectsController(
-        ProjectService projectService,
-        IValidator<CreateProjectDto> createValidator,
+        ISender sender,
         ILogger<ProjectsController> logger)
     {
-        _projectService = projectService ?? throw new ArgumentNullException(nameof(projectService));
-        _createValidator = createValidator ?? throw new ArgumentNullException(nameof(createValidator));
+        _sender = sender ?? throw new ArgumentNullException(nameof(sender));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -51,7 +53,7 @@ public class ProjectsController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
-        var projects = await _projectService.GetUserProjectsAsync(userId, includeArchived, cancellationToken);
+        var projects = await _sender.Send(new GetProjectsQuery { UserId = userId, IncludeArchived = includeArchived }, cancellationToken);
 
         return Ok(new ApiResponseDto<List<ProjectDto>>
         {
@@ -77,7 +79,7 @@ public class ProjectsController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
-        var project = await _projectService.GetProjectByIdAsync(id, userId, includeTasks, cancellationToken);
+        var project = await _sender.Send(new GetProjectByIdQuery { ProjectId = id, UserId = userId, IncludeTasks = includeTasks }, cancellationToken);
 
         if (project == null)
         {
@@ -111,14 +113,18 @@ public class ProjectsController : ControllerBase
         [FromBody] CreateProjectDto createProjectDto,
         CancellationToken cancellationToken = default)
     {
-        var validationResult = await _createValidator.ValidateAsync(createProjectDto, cancellationToken);
-        if (!validationResult.IsValid)
-        {
-            throw new ValidationException(validationResult.Errors);
-        }
-
         var userId = GetCurrentUserId();
-        var project = await _projectService.CreateProjectAsync(createProjectDto, userId, cancellationToken);
+
+        var command = new CreateProjectCommand
+        {
+            Name = createProjectDto.Name,
+            Description = createProjectDto.Description,
+            Color = createProjectDto.Color,
+            DueDate = createProjectDto.DueDate,
+            UserId = userId
+        };
+
+        var project = await _sender.Send(command, cancellationToken);
 
         var response = new ApiResponseDto<ProjectDto>
         {
@@ -147,7 +153,18 @@ public class ProjectsController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
-        var project = await _projectService.UpdateProjectAsync(id, updateProjectDto, userId, cancellationToken);
+
+        var command = new UpdateProjectCommand
+        {
+            ProjectId = id,
+            UserId = userId,
+            Name = updateProjectDto.Name,
+            Description = updateProjectDto.Description,
+            Color = updateProjectDto.Color,
+            DueDate = updateProjectDto.DueDate
+        };
+
+        var project = await _sender.Send(command, cancellationToken);
 
         if (project == null)
         {
@@ -183,10 +200,10 @@ public class ProjectsController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
-        
+
         try
         {
-            var deleted = await _projectService.DeleteProjectAsync(id, userId, cancellationToken);
+            var deleted = await _sender.Send(new DeleteProjectCommand { ProjectId = id, UserId = userId }, cancellationToken);
 
             if (!deleted)
             {
@@ -232,7 +249,7 @@ public class ProjectsController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
-        var archived = await _projectService.ArchiveProjectAsync(id, userId, cancellationToken);
+        var archived = await _sender.Send(new ArchiveProjectCommand { ProjectId = id, UserId = userId }, cancellationToken);
 
         if (!archived)
         {
@@ -267,7 +284,7 @@ public class ProjectsController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
-        var unarchived = await _projectService.UnarchiveProjectAsync(id, userId, cancellationToken);
+        var unarchived = await _sender.Send(new UnarchiveProjectCommand { ProjectId = id, UserId = userId }, cancellationToken);
 
         if (!unarchived)
         {

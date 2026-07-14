@@ -1,8 +1,9 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using MediatR;
 using TaskMgr.Api.Application.DTOs;
-using TaskMgr.Api.Application.Services;
+using TaskMgr.Api.Application.Tasks.Queries.GetDashboardStats;
 
 namespace TaskMgr.Api.Controllers;
 
@@ -17,17 +18,17 @@ namespace TaskMgr.Api.Controllers;
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
 public class DashboardController : ControllerBase
 {
-    private readonly TaskService _taskService;
+    private readonly ISender _sender;
     private readonly ILogger<DashboardController> _logger;
 
     /// <summary>
     /// Initializes a new instance of the DashboardController
     /// </summary>
-    /// <param name="taskService">Task service</param>
+    /// <param name="sender">MediatR sender</param>
     /// <param name="logger">Logger instance</param>
-    public DashboardController(TaskService taskService, ILogger<DashboardController> logger)
+    public DashboardController(ISender sender, ILogger<DashboardController> logger)
     {
-        _taskService = taskService ?? throw new ArgumentNullException(nameof(taskService));
+        _sender = sender ?? throw new ArgumentNullException(nameof(sender));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -42,7 +43,7 @@ public class DashboardController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
-        var stats = await _taskService.GetDashboardStatsAsync(userId, cancellationToken);
+        var stats = await _sender.Send(new GetDashboardStatsQuery { UserId = userId }, cancellationToken);
 
         return Ok(new ApiResponseDto<DashboardStatsDto>
         {

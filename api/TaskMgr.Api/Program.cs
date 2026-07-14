@@ -1,4 +1,5 @@
 using Serilog;
+using TaskMgr.Api.Application.Common.Behaviors;
 using TaskMgr.Api.Extensions;
 using TaskMgr.Api.Middleware;
 
@@ -21,7 +22,11 @@ try
     builder.Services.AddHealthCheckServices(builder.Configuration);
 
     // Add MediatR
-    builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+    builder.Services.AddMediatR(cfg =>
+    {
+        cfg.RegisterServicesFromAssembly(typeof(Program).Assembly);
+        cfg.AddOpenBehavior(typeof(ValidationBehavior<,>));
+    });
     
     // Add SignalR
     builder.Services.AddSignalR();
@@ -35,6 +40,7 @@ try
         {
             options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
             options.JsonSerializerOptions.WriteIndented = true;
+            options.JsonSerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
             options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
         });
 

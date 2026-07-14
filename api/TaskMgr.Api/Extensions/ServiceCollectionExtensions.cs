@@ -6,7 +6,6 @@ using Microsoft.OpenApi.Models;
 using Serilog;
 using System.Reflection;
 using TaskMgr.Api.Application.Mappings;
-using TaskMgr.Api.Application.Services;
 using TaskMgr.Api.Application.Validators;
 using TaskMgr.Api.Data;
 using TaskMgr.Api.Domain.Interfaces;
@@ -83,18 +82,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddScoped<IUnitOfWork, UnitOfWork>();
 
-        // Application services
-        services.AddScoped<IUserService, UserService>();
-        services.AddScoped<ProjectService>();
-        services.AddScoped<TaskService>();
-
         // AutoMapper
         services.AddAutoMapper(typeof(MappingProfile));
 
         // FluentValidation
-        services.AddValidatorsFromAssemblyContaining<CreateProjectValidator>();
-        services.AddValidatorsFromAssemblyContaining<CreateTaskValidator>();
-        services.AddValidatorsFromAssemblyContaining<UpdateTaskValidator>();
+        services.AddValidatorsFromAssemblyContaining<CreateProjectCommandValidator>();
 
         return services;
     }

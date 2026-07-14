@@ -1,5 +1,6 @@
 using AutoMapper;
 using MediatR;
+using TaskMgr.Api.Application.Common;
 using TaskMgr.Api.Application.DTOs;
 using TaskMgr.Api.Domain.Entities;
 using TaskMgr.Api.Domain.Events;
@@ -65,11 +66,7 @@ public class CreateTaskCommandHandler : IRequestHandler<CreateTaskCommand, TaskI
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
         // 6. Dispatch Domain Events
-        foreach (var domainEvent in task.DomainEvents)
-        {
-            await _publisher.Publish(domainEvent, cancellationToken);
-        }
-        task.ClearDomainEvents();
+        await DomainEventDispatcher.PublishAndClearAsync(_publisher, task, cancellationToken);
 
         // 7. Return DTO
         return _mapper.Map<TaskItemDto>(task);

@@ -2,11 +2,14 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
 using TaskMgr.Api.Application.DTOs;
-using TaskMgr.Api.Application.Services;
-using FluentValidation;
 
 using MediatR;
 using TaskMgr.Api.Application.Tasks.Commands.CreateTask;
+using TaskMgr.Api.Application.Tasks.Commands.DeleteTask;
+using TaskMgr.Api.Application.Tasks.Commands.RecordTaskTime;
+using TaskMgr.Api.Application.Tasks.Commands.UpdateTask;
+using TaskMgr.Api.Application.Tasks.Queries.GetTaskById;
+using TaskMgr.Api.Application.Tasks.Queries.GetTasks;
 
 namespace TaskMgr.Api.Controllers;
 
@@ -21,31 +24,19 @@ namespace TaskMgr.Api.Controllers;
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
 public class TasksController : ControllerBase
 {
-    private readonly TaskService _taskService;
     private readonly ISender _sender;
-    private readonly IValidator<CreateTaskDto> _createValidator;
-    private readonly IValidator<UpdateTaskDto> _updateValidator;
     private readonly ILogger<TasksController> _logger;
 
     /// <summary>
     /// Initializes a new instance of the TasksController
     /// </summary>
-    /// <param name="taskService">Task service</param>
     /// <param name="sender">MediatR sender</param>
-    /// <param name="createValidator">Create task validator</param>
-    /// <param name="updateValidator">Update task validator</param>
     /// <param name="logger">Logger instance</param>
     public TasksController(
-        TaskService taskService,
         ISender sender,
-        IValidator<CreateTaskDto> createValidator,
-        IValidator<UpdateTaskDto> updateValidator,
         ILogger<TasksController> logger)
     {
-        _taskService = taskService ?? throw new ArgumentNullException(nameof(taskService));
         _sender = sender ?? throw new ArgumentNullException(nameof(sender));
-        _createValidator = createValidator ?? throw new ArgumentNullException(nameof(createValidator));
-        _updateValidator = updateValidator ?? throw new ArgumentNullException(nameof(updateValidator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -83,7 +74,7 @@ public class TasksController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
-        
+
         var filter = new TaskFilterDto
         {
             ProjectId = projectId,
@@ -102,7 +93,15 @@ public class TasksController : ControllerBase
         if (limit < 1) limit = 20;
         if (limit > 100) limit = 100;
 
-        var result = await _taskService.GetTasksAsync(userId, filter, page, limit, cancellationToken);
+        var query = new GetTasksQuery
+        {
+            UserId = userId,
+            Filter = filter,
+            PageNumber = page,
+            PageSize = limit
+        };
+
+        var result = await _sender.Send(query, cancellationToken);
         return Ok(result);
     }
 
@@ -120,7 +119,7 @@ public class TasksController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
-        var task = await _taskService.GetTaskByIdAsync(id, userId, cancellationToken);
+        var task = await _sender.Send(new GetTaskByIdQuery { TaskId = id, UserId = userId }, cancellationToken);
 
         if (task == null)
         {
@@ -154,15 +153,8 @@ public class TasksController : ControllerBase
         [FromBody] CreateTaskDto createTaskDto,
         CancellationToken cancellationToken = default)
     {
-        var validationResult = await _createValidator.ValidateAsync(createTaskDto, cancellationToken);
-        if (!validationResult.IsValid)
-        {
-            throw new ValidationException(validationResult.Errors);
-        }
-
         var userId = GetCurrentUserId();
 
-        // Use MediatR for CQRS
         var command = new CreateTaskCommand
         {
             Title = createTaskDto.Title,
@@ -204,14 +196,23 @@ public class TasksController : ControllerBase
         [FromBody] UpdateTaskDto updateTaskDto,
         CancellationToken cancellationToken = default)
     {
-        var validationResult = await _updateValidator.ValidateAsync(updateTaskDto, cancellationToken);
-        if (!validationResult.IsValid)
-        {
-            throw new ValidationException(validationResult.Errors);
-        }
-
         var userId = GetCurrentUserId();
-        var task = await _taskService.UpdateTaskAsync(id, updateTaskDto, userId, cancellationToken);
+
+        var command = new UpdateTaskCommand
+        {
+            TaskId = id,
+            UserId = userId,
+            Title = updateTaskDto.Title,
+            Description = updateTaskDto.Description,
+            Status = updateTaskDto.Status,
+            Priority = updateTaskDto.Priority,
+            AssignedToUserId = updateTaskDto.AssignedToUserId,
+            DueDate = updateTaskDto.DueDate,
+            EstimatedHours = updateTaskDto.EstimatedHours,
+            Tags = updateTaskDto.Tags
+        };
+
+        var task = await _sender.Send(command, cancellationToken);
 
         if (task == null)
         {
@@ -246,7 +247,7 @@ public class TasksController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var userId = GetCurrentUserId();
-        var deleted = await _taskService.DeleteTaskAsync(id, userId, cancellationToken);
+        var deleted = await _sender.Send(new DeleteTaskCommand { TaskId = id, UserId = userId }, cancellationToken);
 
         if (!deleted)
         {
@@ -283,19 +284,17 @@ public class TasksController : ControllerBase
         [FromBody] RecordTimeDto recordTimeDto,
         CancellationToken cancellationToken = default)
     {
-        if (recordTimeDto.Hours <= 0)
-        {
-            return BadRequest(new ProblemDetails
-            {
-                Title = "Invalid time",
-                Detail = "Hours must be greater than 0.",
-                Status = StatusCodes.Status400BadRequest,
-                Instance = HttpContext.Request.Path
-            });
-        }
-
         var userId = GetCurrentUserId();
-        var task = await _taskService.RecordTimeAsync(id, recordTimeDto, userId, cancellationToken);
+
+        var command = new RecordTaskTimeCommand
+        {
+            TaskId = id,
+            UserId = userId,
+            Hours = recordTimeDto.Hours,
+            Description = recordTimeDto.Description
+        };
+
+        var task = await _sender.Send(command, cancellationToken);
 
         if (task == null)
         {
