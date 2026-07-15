@@ -7,23 +7,40 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { onMounted, watch } from 'vue'
 import { useSignalR } from './composables/useSignalR'
 import { useNotification } from './composables/useNotification'
+import { useAuthStore } from './stores/auth'
+import { useUsersApi } from './composables/useApi'
 import { logger } from './services/logger'
 import { config } from './services/config'
 import ErrorBoundary from './components/ErrorBoundary.vue'
 
-const { startConnection, on, isConnected } = useSignalR()
+const { startConnection, stopConnection, on, isConnected } = useSignalR()
 const { showNotification } = useNotification()
+const authStore = useAuthStore()
+const { initializeUser } = useUsersApi()
+
+// Ensures the internal User row exists for this account before anything that
+// depends on it (task ownership, SignalR group membership) runs. Idempotent on
+// the backend, and needed here (not just in CallbackPage.vue) because MSAL can
+// resolve an authenticated session purely from cached SSO state without ever
+// navigating through /auth/callback again.
+const ensureUserInitialized = async () => {
+  try {
+    await initializeUser()
+  } catch (error) {
+    logger.error('Failed to initialize user profile:', error)
+  }
+}
 
 const handleGlobalError = (error: Error, errorInfo: any) => {
-  logger.error('Global application error:', { 
-    error: error.message, 
+  logger.error('Global application error:', {
+    error: error.message,
     stack: error.stack,
-    component: errorInfo.info 
+    component: errorInfo.info
   })
-  
+
   showNotification({
     title: 'Application Error',
     message: 'Something went wrong. Please try refreshing the page.',
@@ -31,30 +48,55 @@ const handleGlobalError = (error: Error, errorInfo: any) => {
   })
 }
 
+const connectRealtime = async () => {
+  if (!config.get('features').realTimeUpdates) return
+
+  const tokenProvider = config.isAuthEnabled()
+    ? () => authStore.getAccessToken()
+    : undefined
+
+  await startConnection(tokenProvider)
+
+  on('TaskCreated', (task) => {
+    logger.info('New Task Created via SignalR:', { task })
+
+    showNotification({
+      title: 'New Task Created',
+      message: `Task "${task.title}" has been created.`,
+      type: 'success'
+    })
+  })
+
+  logger.info('SignalR event handlers registered')
+}
+
 onMounted(async () => {
   try {
     logger.info('Application starting...')
-    
-    if (config.get('features').realTimeUpdates) {
-      // Start SignalR connection
-      await startConnection()
-      
-      // Listen for events
-      on('TaskCreated', (task) => {
-        logger.info('New Task Created via SignalR:', { task })
-        
-        showNotification({
-          title: 'New Task Created',
-          message: `Task "${task.title}" has been created.`,
-          type: 'success'
-        })
-      })
-      
-      logger.info('SignalR event handlers registered')
+
+    if (!config.isAuthEnabled()) {
+      // Dev mode: connect immediately, no token needed (mock user on the API side)
+      await connectRealtime()
+      return
     }
+
+    if (authStore.isAuthenticated) {
+      await ensureUserInitialized()
+      await connectRealtime()
+    }
+
+    // Reactively (re)connect on login and disconnect on logout
+    watch(() => authStore.isAuthenticated, async (isAuth) => {
+      if (isAuth) {
+        await ensureUserInitialized()
+        await connectRealtime()
+      } else {
+        await stopConnection()
+      }
+    })
   } catch (error) {
     logger.error('Failed to initialize application:', error)
-    
+
     showNotification({
       title: 'Initialization Error',
       message: 'Failed to initialize some features. The application will continue with limited functionality.',

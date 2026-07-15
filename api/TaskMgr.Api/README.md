@@ -1,6 +1,6 @@
 # TaskMgr.Api
 
-.NET 8 Web API for the TaskManager app: Clean Architecture, EF Core, and optional Azure AD B2C auth. See the [root README](../../README.md) for the overall architecture and technology rationale — this file covers API-specific setup.
+.NET 8 Web API for the TaskManager app: Clean Architecture, EF Core, and optional Microsoft Entra External ID auth. See the [root README](../../README.md) for the overall architecture and technology rationale — this file covers API-specific setup.
 
 ## Setup
 
@@ -14,22 +14,24 @@ dotnet run
 - HTTP: `http://localhost:5000` (LocalDB dev profile: `http://localhost:65454`)
 - Swagger: `/swagger`
 
-### Azure AD B2C (optional)
+### Microsoft Entra External ID (optional)
 
-Disabled by default in local development (see root README). To enable it, set the following in `appsettings.json`:
+Enforcement is controlled by the `Auth:Enabled` flag (`appsettings.json`, or `Auth__Enabled` app setting when deployed) — `false` by default, so REST controllers and the `TaskHub` SignalR hub fall back to a mock user (see root README) without needing a tenant. To enable it, set `Auth:Enabled` to `true` and fill in `AzureAd` with your external tenant's details:
 
 ```json
 {
-  "AzureAdB2C": {
-    "Instance": "https://<tenant>.b2clogin.com/",
-    "Domain": "<tenant>.onmicrosoft.com",
+  "Auth": {
+    "Enabled": true
+  },
+  "AzureAd": {
+    "Instance": "https://<tenant-subdomain>.ciamlogin.com/",
     "TenantId": "<tenant-id>",
-    "ClientId": "<api-client-id>",
-    "SignUpSignInPolicyId": "B2C_1_signupsignin",
-    "Audience": "<api-client-id>"
+    "ClientId": "<api-client-id>"
   }
 }
 ```
+
+Prefer `dotnet user-secrets` over committing real tenant values to `appsettings.json`.
 
 ### Local database
 

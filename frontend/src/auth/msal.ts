@@ -2,11 +2,14 @@ import { PublicClientApplication, type Configuration, LogLevel } from '@azure/ms
 
 const msalConfig: Configuration = {
   auth: {
-    clientId: import.meta.env.VITE_B2C_CLIENT_ID || 'your-client-id',
-    authority: import.meta.env.VITE_B2C_AUTHORITY || 'https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/B2C_1_signupsignin',
+    clientId: import.meta.env.VITE_AUTH_CLIENT_ID || 'your-client-id',
+    // Microsoft Entra External ID authority: https://<tenant-subdomain>.ciamlogin.com/
+    // (no user-flow/policy name in the URL - the user flow is associated with the
+    // app registration in the Entra admin center instead). If a custom URL domain
+    // is configured, add it here via knownAuthorities.
+    authority: import.meta.env.VITE_AUTH_AUTHORITY || 'https://your-tenant.ciamlogin.com/',
     redirectUri: window.location.origin,
-    postLogoutRedirectUri: window.location.origin,
-    knownAuthorities: [import.meta.env.VITE_B2C_AUTHORITY?.replace('https://', '') || 'your-tenant.b2clogin.com']
+    postLogoutRedirectUri: window.location.origin
   },
   cache: {
     cacheLocation: 'localStorage',

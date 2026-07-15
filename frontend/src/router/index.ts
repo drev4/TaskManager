@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { config } from '@/services/config'
 import NProgress from 'nprogress'
 
 const router = createRouter({
@@ -71,27 +72,27 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   NProgress.start()
 
-  // TODO: Enable authentication when Azure AD B2C is configured
-  // const authStore = useAuthStore()
+  if (!config.isAuthEnabled()) {
+    next()
+    return
+  }
 
-  // // Initialize authentication if not already done
-  // if (!authStore.isInitialized) {
-  //   await authStore.initialize()
-  // }
+  const authStore = useAuthStore()
 
-  // const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
-  // const requiresGuest = to.matched.some(record => record.meta.requiresGuest)
+  if (!authStore.isInitialized) {
+    await authStore.initialize()
+  }
 
-  // if (requiresAuth && !authStore.isAuthenticated) {
-  //   next({ name: 'login' })
-  // } else if (requiresGuest && authStore.isAuthenticated) {
-  //   next({ name: 'dashboard' })
-  // } else {
-  //   next()
-  // }
+  const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
+  const requiresGuest = to.matched.some(record => record.meta.requiresGuest)
 
-  // Temporary: Skip authentication for development
-  next()
+  if (requiresAuth && !authStore.isAuthenticated) {
+    next({ name: 'login' })
+  } else if (requiresGuest && authStore.isAuthenticated) {
+    next({ name: 'dashboard' })
+  } else {
+    next()
+  }
 })
 
 router.afterEach(() => {

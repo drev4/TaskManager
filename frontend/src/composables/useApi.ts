@@ -2,12 +2,13 @@ import { ref, computed } from 'vue'
 import axios, { type AxiosError, type AxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { useNotification } from '@/composables/useNotification'
+import { config as appConfig } from '@/services/config'
 import type { ApiResponse, ApiError } from '@/types'
 
 // Create axios instance
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
-  timeout: 30000,
+  baseURL: appConfig.get('api').baseUrl,
+  timeout: appConfig.get('api').timeout,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -16,15 +17,17 @@ const api = axios.create({
 export function useApi() {
   const authStore = useAuthStore()
   const { showError } = useNotification()
-  
+
   // Request interceptor to add auth token
   api.interceptors.request.use(
-    async (config) => {
-      const token = await authStore.getAccessToken()
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`
+    async (requestConfig) => {
+      if (appConfig.isAuthEnabled()) {
+        const token = await authStore.getAccessToken()
+        if (token) {
+          requestConfig.headers.Authorization = `Bearer ${token}`
+        }
       }
-      return config
+      return requestConfig
     },
     (error) => {
       return Promise.reject(error)
@@ -175,12 +178,24 @@ export function useTasksApi() {
 
 export function useDashboardApi() {
   const { api } = useApi()
-  
+
   const getDashboardStats = () => api.get('/api/Dashboard/stats')
   const getRecentActivity = () => api.get('/api/Dashboard/activity')
-  
+
   return {
     getDashboardStats,
     getRecentActivity
+  }
+}
+
+export function useUsersApi() {
+  const { api } = useApi()
+
+  const initializeUser = () => api.post('/api/Users/initialize')
+  const getCurrentUser = () => api.get('/api/Users/me')
+
+  return {
+    initializeUser,
+    getCurrentUser
   }
 }

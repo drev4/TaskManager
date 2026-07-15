@@ -1,4 +1,4 @@
-import { ref, onUnmounted } from 'vue';
+import { ref, readonly, onUnmounted } from 'vue';
 import { HubConnectionBuilder, HubConnection, LogLevel, HttpTransportType } from '@microsoft/signalr';
 import { logger } from '@/services/logger';
 import { config } from '@/services/config';
@@ -13,20 +13,24 @@ export function useSignalR() {
     const { showNotification } = useNotification();
     const signalRConfig = config.get('signalR');
 
-    const startConnection = async (token?: string) => {
+    const startConnection = async (tokenProvider?: () => Promise<string | null>) => {
         if (connection.value || isConnecting.value) {
             logger.warn('SignalR connection already exists or is connecting');
             return;
         }
 
         isConnecting.value = true;
-        
+
         try {
             logger.info('Starting SignalR connection...');
 
             connection.value = new HubConnectionBuilder()
                 .withUrl(signalRConfig.hubUrl, {
-                    accessTokenFactory: () => token || '',
+                    accessTokenFactory: async () => {
+                        if (!tokenProvider) return '';
+                        const token = await tokenProvider();
+                        return token || '';
+                    },
                     transport: HttpTransportType.WebSockets | HttpTransportType.LongPolling
                 })
                 .withAutomaticReconnect({

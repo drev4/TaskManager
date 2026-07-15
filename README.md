@@ -28,7 +28,7 @@ This is a personal project used to practice and demonstrate a Clean Architecture
 
 **Tailwind CSS** — avoids maintaining a separate stylesheet per component for a UI this size; utility classes are also easier to keep consistent across a small team or solo project.
 
-**Azure AD B2C (optional)** — the API is wired for it via `Microsoft.Identity.Web`, but it's disabled by default in local development in favor of a mock user, so the app can be cloned and run without an Azure tenant.
+**Microsoft Entra External ID (optional)** — the API is wired for it via `Microsoft.Identity.Web`, but it's disabled by default in local development in favor of a mock user, so the app can be cloned and run without an Azure tenant. (Azure AD B2C, the predecessor product, is no longer available for new tenants as of May 2025.)
 
 ## Architecture
 
@@ -102,7 +102,9 @@ Runs at http://localhost:3001.
 
 ### Authentication in local development
 
-Azure AD B2C is disabled by default; the API uses a mock user (seeded as "Bob Wilson") so the app runs without an Azure tenant. To enable real auth: configure a B2C tenant, set the corresponding values in `.env`, uncomment the `[Authorize]` attributes in the controllers, and remove the mock-user fallback in `GetCurrentUserId()`.
+Microsoft Entra External ID auth is wired into the code (Microsoft.Identity.Web on the API, MSAL.js on the frontend) but toggled off by default via a config flag, not commented-out code — `Auth:Enabled` in `api/TaskMgr.Api/appsettings.json` and `VITE_AUTH_ENABLED` in `frontend/.env`. With both `false` (the default), the API uses a mock user (seeded as "Bob Wilson") for REST controllers and the `TaskHub` SignalR hub, and the frontend skips MSAL entirely, so the app runs end-to-end without an Azure tenant.
+
+To enable real auth once you have a Microsoft Entra External ID tenant (an "external tenant" — see [Microsoft's overview](https://learn.microsoft.com/entra/external-id/external-identities-overview)): fill in the `AzureAd` section of `appsettings.json` (or the `AzureAd__*` app settings when deployed) and set `Auth:Enabled` to `true`; on the frontend, fill in `VITE_AUTH_CLIENT_ID`, `VITE_AUTH_AUTHORITY` (format `https://<tenant-subdomain>.ciamlogin.com/`), and `VITE_AUTH_API_SCOPE` in `.env` and set `VITE_AUTH_ENABLED=true`. No source changes are needed on either side.
 
 ## Testing
 

@@ -18,16 +18,22 @@
 import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useUsersApi } from '@/composables/useApi'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { initializeUser } = useUsersApi()
 
 onMounted(async () => {
   try {
     // Handle the redirect callback
     const success = await authStore.handleRedirectCallback()
-    
+
     if (success) {
+      // Ensure an internal User row exists for this account before anything
+      // (SignalR group membership, task ownership) depends on it.
+      await initializeUser()
+
       // Redirect to dashboard on successful authentication
       router.push('/dashboard')
     } else {

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using MediatR;
 using TaskMgr.Api.Application.DTOs;
@@ -8,6 +9,8 @@ using TaskMgr.Api.Application.Users.Commands.UpdateUserProfile;
 using TaskMgr.Api.Application.Users.Queries.GetActiveUsers;
 using TaskMgr.Api.Application.Users.Queries.GetCurrentUser;
 using TaskMgr.Api.Application.Users.Queries.GetUserById;
+using TaskMgr.Api.Infrastructure.Authorization;
+using TaskMgr.Api.Options;
 
 namespace TaskMgr.Api.Controllers;
 
@@ -16,7 +19,7 @@ namespace TaskMgr.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-//[Authorize] // TODO: Enable when authentication is configured
+[Authorize(Policy = AuthorizationPolicies.ConditionalAuth)]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
@@ -24,16 +27,19 @@ public class UsersController : ControllerBase
 {
     private readonly ISender _sender;
     private readonly ILogger<UsersController> _logger;
+    private readonly IOptionsMonitor<AuthOptions> _authOptions;
 
     /// <summary>
     /// Initializes a new instance of the UsersController
     /// </summary>
     /// <param name="sender">MediatR sender</param>
     /// <param name="logger">Logger instance</param>
-    public UsersController(ISender sender, ILogger<UsersController> logger)
+    /// <param name="authOptions">Auth feature toggle</param>
+    public UsersController(ISender sender, ILogger<UsersController> logger, IOptionsMonitor<AuthOptions> authOptions)
     {
         _sender = sender ?? throw new ArgumentNullException(nameof(sender));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _authOptions = authOptions ?? throw new ArgumentNullException(nameof(authOptions));
     }
 
     /// <summary>
@@ -221,13 +227,20 @@ public class UsersController : ControllerBase
                            ?? User.FindFirst("sub")?.Value
                            ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        if (string.IsNullOrEmpty(azureObjectId))
+        if (!string.IsNullOrEmpty(azureObjectId))
         {
-            _logger.LogWarning("Unable to extract Azure Object ID from token claims");
-            throw new UnauthorizedAccessException("Invalid user token - missing object ID");
+            return azureObjectId;
         }
 
-        return azureObjectId;
+        if (!_authOptions.CurrentValue.Enabled)
+        {
+            // Development mode: Bob Wilson's AzureObjectId from seed-data.sql
+            _logger.LogInformation("No user authentication found, using mock user for development");
+            return "dev-azure-id-3";
+        }
+
+        _logger.LogWarning("Unable to extract Azure Object ID from token claims");
+        throw new UnauthorizedAccessException("Invalid user token - missing object ID");
     }
 
     /// <summary>
@@ -236,10 +249,17 @@ public class UsersController : ControllerBase
     /// <returns>User email</returns>
     private string GetCurrentUserEmail()
     {
-        return User.FindFirst("emails")?.Value
-               ?? User.FindFirst("email")?.Value
-               ?? User.FindFirst(ClaimTypes.Email)?.Value
-               ?? string.Empty;
+        var email = User.FindFirst("emails")?.Value
+                   ?? User.FindFirst("email")?.Value
+                   ?? User.FindFirst(ClaimTypes.Email)?.Value;
+
+        if (!string.IsNullOrEmpty(email))
+        {
+            return email;
+        }
+
+        // Development mode: Bob Wilson's email from seed-data.sql
+        return !_authOptions.CurrentValue.Enabled ? "bob.wilson@example.com" : string.Empty;
     }
 
     /// <summary>
@@ -248,9 +268,16 @@ public class UsersController : ControllerBase
     /// <returns>User display name</returns>
     private string GetCurrentUserDisplayName()
     {
-        return User.FindFirst("name")?.Value
-               ?? User.FindFirst(ClaimTypes.Name)?.Value
-               ?? User.FindFirst("given_name")?.Value
-               ?? string.Empty;
+        var displayName = User.FindFirst("name")?.Value
+                         ?? User.FindFirst(ClaimTypes.Name)?.Value
+                         ?? User.FindFirst("given_name")?.Value;
+
+        if (!string.IsNullOrEmpty(displayName))
+        {
+            return displayName;
+        }
+
+        // Development mode: Bob Wilson's display name from seed-data.sql
+        return !_authOptions.CurrentValue.Enabled ? "Bob Wilson" : string.Empty;
     }
 }

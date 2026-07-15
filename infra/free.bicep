@@ -1,6 +1,14 @@
 // TaskManager - Ultra Free Deployment (SQLite + Free App Service)
 param location string = resourceGroup().location
 
+@description('Enables JWT auth enforcement (Auth:Enabled). Leave false until a real Microsoft Entra External ID tenant is configured.')
+param authEnabled bool = false
+param azureAdInstance string = ''
+param azureAdTenantId string = ''
+param azureAdClientId string = ''
+@description('Production frontend origin, appended to AllowedOrigins for CORS.')
+param productionFrontendUrl string = ''
+
 // Variables
 var appName = 'taskmgr${uniqueString(resourceGroup().id)}'
 var storageName = 'taskmgrstorage${uniqueString(resourceGroup().id)}'
@@ -33,7 +41,7 @@ resource appService 'Microsoft.Web/sites@2022-03-01' = {
       scmType: 'None'
       use32BitWorkerProcess: false
       alwaysOn: false // Not available in Free tier
-      webSocketsEnabled: false
+      webSocketsEnabled: true
       requestTracingEnabled: true
       httpLoggingEnabled: true
       logsDirectorySizeLimit: 40
@@ -50,6 +58,29 @@ resource appService 'Microsoft.Web/sites@2022-03-01' = {
         {
           name: 'DATABASE_TYPE'
           value: 'SQLite'
+        }
+        {
+          name: 'Auth__Enabled'
+          value: string(authEnabled)
+        }
+        {
+          name: 'AzureAd__Instance'
+          value: azureAdInstance
+        }
+        {
+          name: 'AzureAd__TenantId'
+          value: azureAdTenantId
+        }
+        {
+          name: 'AzureAd__ClientId'
+          value: azureAdClientId
+        }
+        {
+          // appsettings.json's AllowedOrigins array already fills indices 0-5 with
+          // localhost dev origins; the env-var config provider merges array entries
+          // by index, so this adds the production origin without dropping those.
+          name: 'AllowedOrigins__6'
+          value: productionFrontendUrl
         }
       ]
     }

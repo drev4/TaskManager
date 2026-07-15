@@ -53,7 +53,7 @@ class ConfigService {
         maxRetries: 5
       },
       auth: {
-        enabled: environment === 'production',
+        enabled: import.meta.env.VITE_AUTH_ENABLED === 'true',
         mockUser: {
           id: '3',
           email: 'bob.wilson@example.com',

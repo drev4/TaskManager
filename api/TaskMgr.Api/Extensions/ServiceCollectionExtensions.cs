@@ -1,5 +1,6 @@
 using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using Microsoft.OpenApi.Models;
@@ -9,7 +10,9 @@ using TaskMgr.Api.Application.Mappings;
 using TaskMgr.Api.Application.Validators;
 using TaskMgr.Api.Data;
 using TaskMgr.Api.Domain.Interfaces;
+using TaskMgr.Api.Infrastructure.Authorization;
 using TaskMgr.Api.Infrastructure.Persistence;
+using TaskMgr.Api.Options;
 
 namespace TaskMgr.Api.Extensions;
 
@@ -57,14 +60,40 @@ public static class ServiceCollectionExtensions
     /// <returns>Service collection</returns>
     public static IServiceCollection AddAuthenticationServices(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-            .AddMicrosoftIdentityWebApi(configuration.GetSection("AzureAdB2C"));
+        services.Configure<AuthOptions>(configuration.GetSection(AuthOptions.SectionName));
 
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+            .AddMicrosoftIdentityWebApi(configuration.GetSection("AzureAd"));
+
+        // Browsers can't set the Authorization header on a WebSocket upgrade request,
+        // so @microsoft/signalr sends the token via ?access_token=... instead. Read it
+        // for hub paths, chaining any OnMessageReceived Microsoft.Identity.Web may set.
+        services.Configure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+        {
+            var previousOnMessageReceived = options.Events?.OnMessageReceived;
+            options.Events ??= new JwtBearerEvents();
+            options.Events.OnMessageReceived = async context =>
+            {
+                if (previousOnMessageReceived != null)
+                {
+                    await previousOnMessageReceived(context);
+                }
+
+                var accessToken = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    context.HttpContext.Request.Path.StartsWithSegments("/hubs"))
+                {
+                    context.Token = accessToken;
+                }
+            };
+        });
+
+        services.AddSingleton<IAuthorizationHandler, ConditionalAuthHandler>();
         services.AddAuthorization(options =>
         {
-            options.AddPolicy("RequireAuthenticatedUser", policy =>
+            options.AddPolicy(AuthorizationPolicies.ConditionalAuth, policy =>
             {
-                policy.RequireAuthenticatedUser();
+                policy.Requirements.Add(new ConditionalAuthRequirement());
             });
         });
 

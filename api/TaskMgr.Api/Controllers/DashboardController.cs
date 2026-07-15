@@ -4,6 +4,8 @@ using System.Security.Claims;
 using MediatR;
 using TaskMgr.Api.Application.DTOs;
 using TaskMgr.Api.Application.Tasks.Queries.GetDashboardStats;
+using TaskMgr.Api.Application.Users.Queries.GetCurrentUser;
+using TaskMgr.Api.Infrastructure.Authorization;
 
 namespace TaskMgr.Api.Controllers;
 
@@ -12,7 +14,7 @@ namespace TaskMgr.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-//[Authorize] // TODO: Enable when authentication is configured
+[Authorize(Policy = AuthorizationPolicies.ConditionalAuth)]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
@@ -42,7 +44,7 @@ public class DashboardController : ControllerBase
     public async Task<ActionResult<ApiResponseDto<DashboardStatsDto>>> GetDashboardStats(
         CancellationToken cancellationToken = default)
     {
-        var userId = GetCurrentUserId();
+        var userId = await GetCurrentUserIdAsync();
         var stats = await _sender.Send(new GetDashboardStatsQuery { UserId = userId }, cancellationToken);
 
         return Ok(new ApiResponseDto<DashboardStatsDto>
@@ -69,7 +71,7 @@ public class DashboardController : ControllerBase
         if (limit < 1) limit = 10;
         if (limit > 50) limit = 50;
 
-        var userId = GetCurrentUserId();
+        var userId = await GetCurrentUserIdAsync();
 
         // For now, return mock data - in a real implementation, you'd have an activity tracking system
         var activities = GetMockRecentActivity(userId, limit);
@@ -98,7 +100,7 @@ public class DashboardController : ControllerBase
         if (days < 7) days = 7;
         if (days > 365) days = 365;
 
-        var userId = GetCurrentUserId();
+        var userId = await GetCurrentUserIdAsync();
 
         // For now, return mock trend data
         var trends = GetMockTrendData(days);
@@ -121,7 +123,7 @@ public class DashboardController : ControllerBase
     public async Task<ActionResult<ApiResponseDto<Dictionary<string, object>>>> GetProductivityMetrics(
         CancellationToken cancellationToken = default)
     {
-        var userId = GetCurrentUserId();
+        var userId = await GetCurrentUserIdAsync();
 
         // For now, return mock productivity data
         var metrics = GetMockProductivityMetrics();
@@ -135,24 +137,31 @@ public class DashboardController : ControllerBase
     }
 
     /// <summary>
-    /// Gets the current user ID from the JWT token
+    /// Resolves the internal (domain) User.Id for the current request. The JWT's
+    /// oid/sub claim is the Azure Object ID, not our internal User.Id, so it must be
+    /// looked up via GetCurrentUserQuery rather than parsed directly as a Guid.
     /// </summary>
-    /// <returns>Current user ID</returns>
-    private Guid GetCurrentUserId()
+    /// <returns>Current internal user ID</returns>
+    private async Task<Guid> GetCurrentUserIdAsync()
     {
-        // TODO: Remove this mock user when authentication is enabled
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                         ?? User.FindFirst("sub")?.Value
-                         ?? User.FindFirst("oid")?.Value;
+        var azureObjectId = User.FindFirst("oid")?.Value
+                           ?? User.FindFirst("sub")?.Value
+                           ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        if (!string.IsNullOrEmpty(userIdClaim) && Guid.TryParse(userIdClaim, out var userId))
+        if (string.IsNullOrEmpty(azureObjectId))
         {
-            return userId;
+            // Development mode: return Bob Wilson's user ID from seed data
+            _logger.LogInformation("No user authentication found, using mock user for development");
+            return Guid.Parse("2C6D7627-738C-4D39-9644-E7B703332DC5");
         }
 
-        // Development mode: return Bob Wilson's user ID from seed data
-        _logger.LogInformation("No user authentication found, using mock user for development");
-        return Guid.Parse("2C6D7627-738C-4D39-9644-E7B703332DC5");
+        var user = await _sender.Send(new GetCurrentUserQuery { AzureObjectId = azureObjectId });
+        if (user == null)
+        {
+            throw new UnauthorizedAccessException("User is authenticated but has not been initialized. Call POST /api/Users/initialize first.");
+        }
+
+        return user.Id;
     }
 
     /// <summary>

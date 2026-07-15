@@ -4,6 +4,8 @@ import { msalInstance, initializeMsal } from '@/auth/msal'
 import type { AuthUser } from '@/types'
 import { useNotification } from '@/composables/useNotification'
 
+const apiScope = import.meta.env.VITE_AUTH_API_SCOPE as string | undefined
+
 export const useAuthStore = defineStore('auth', () => {
   // State
   const user = ref<AuthUser | null>(null)
@@ -106,19 +108,19 @@ export const useAuthStore = defineStore('auth', () => {
       if (!account) return null
       
       const tokenRequest = {
-        scopes: ['https://graph.microsoft.com/User.Read'],
+        scopes: apiScope ? [apiScope] : [],
         account: account
       }
-      
+
       const response = await msalInstance.acquireTokenSilent(tokenRequest)
       return response.accessToken
     } catch (error) {
       console.error('Error getting access token:', error)
-      
+
       try {
         // Try to get token via popup if silent request fails
         const tokenRequest = {
-          scopes: ['https://graph.microsoft.com/User.Read'],
+          scopes: apiScope ? [apiScope] : [],
           account: msalInstance.getActiveAccount()
         }
         

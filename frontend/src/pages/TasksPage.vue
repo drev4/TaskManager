@@ -252,7 +252,7 @@ const projectsApi = useProjectsApi()
 const { execute: executeGetTasks } = useApiCall<Task[]>()
 const { execute: executeGetProjects } = useApiCall<Project[]>()
 const { execute: executeCreate } = useApiCall<Task>()
-const { showSuccess } = useNotification()
+const { showSuccess, showError } = useNotification()
 
 const tasks = ref<Task[]>([])
 const projects = ref<Project[]>([])
@@ -343,7 +343,12 @@ const loadProjects = async () => {
 }
 
 const createTask = async () => {
-  if (!newTask.value.title.trim() || !newTask.value.projectId) {
+  if (!newTask.value.title.trim()) {
+    showError('Task title is required')
+    return
+  }
+  if (!newTask.value.projectId) {
+    showError('Select a project first. Create one from the Projects page if you don\'t have any yet.')
     return
   }
   

@@ -10,6 +10,8 @@ using TaskMgr.Api.Application.Projects.Commands.UnarchiveProject;
 using TaskMgr.Api.Application.Projects.Commands.UpdateProject;
 using TaskMgr.Api.Application.Projects.Queries.GetProjectById;
 using TaskMgr.Api.Application.Projects.Queries.GetProjects;
+using TaskMgr.Api.Application.Users.Queries.GetCurrentUser;
+using TaskMgr.Api.Infrastructure.Authorization;
 
 namespace TaskMgr.Api.Controllers;
 
@@ -18,7 +20,7 @@ namespace TaskMgr.Api.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/[controller]")]
-//[Authorize] // TODO: Enable when authentication is configured
+[Authorize(Policy = AuthorizationPolicies.ConditionalAuth)]
 [Produces("application/json")]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
 [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status500InternalServerError)]
@@ -52,7 +54,7 @@ public class ProjectsController : ControllerBase
         [FromQuery] bool includeArchived = false,
         CancellationToken cancellationToken = default)
     {
-        var userId = GetCurrentUserId();
+        var userId = await GetCurrentUserIdAsync();
         var projects = await _sender.Send(new GetProjectsQuery { UserId = userId, IncludeArchived = includeArchived }, cancellationToken);
 
         return Ok(new ApiResponseDto<List<ProjectDto>>
@@ -78,7 +80,7 @@ public class ProjectsController : ControllerBase
         [FromQuery] bool includeTasks = false,
         CancellationToken cancellationToken = default)
     {
-        var userId = GetCurrentUserId();
+        var userId = await GetCurrentUserIdAsync();
         var project = await _sender.Send(new GetProjectByIdQuery { ProjectId = id, UserId = userId, IncludeTasks = includeTasks }, cancellationToken);
 
         if (project == null)
@@ -113,7 +115,7 @@ public class ProjectsController : ControllerBase
         [FromBody] CreateProjectDto createProjectDto,
         CancellationToken cancellationToken = default)
     {
-        var userId = GetCurrentUserId();
+        var userId = await GetCurrentUserIdAsync();
 
         var command = new CreateProjectCommand
         {
@@ -152,7 +154,7 @@ public class ProjectsController : ControllerBase
         [FromBody] UpdateProjectDto updateProjectDto,
         CancellationToken cancellationToken = default)
     {
-        var userId = GetCurrentUserId();
+        var userId = await GetCurrentUserIdAsync();
 
         var command = new UpdateProjectCommand
         {
@@ -199,7 +201,7 @@ public class ProjectsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        var userId = GetCurrentUserId();
+        var userId = await GetCurrentUserIdAsync();
 
         try
         {
@@ -248,7 +250,7 @@ public class ProjectsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        var userId = GetCurrentUserId();
+        var userId = await GetCurrentUserIdAsync();
         var archived = await _sender.Send(new ArchiveProjectCommand { ProjectId = id, UserId = userId }, cancellationToken);
 
         if (!archived)
@@ -283,7 +285,7 @@ public class ProjectsController : ControllerBase
         Guid id,
         CancellationToken cancellationToken = default)
     {
-        var userId = GetCurrentUserId();
+        var userId = await GetCurrentUserIdAsync();
         var unarchived = await _sender.Send(new UnarchiveProjectCommand { ProjectId = id, UserId = userId }, cancellationToken);
 
         if (!unarchived)
@@ -306,23 +308,30 @@ public class ProjectsController : ControllerBase
     }
 
     /// <summary>
-    /// Gets the current user ID from the JWT token
+    /// Resolves the internal (domain) User.Id for the current request. The JWT's
+    /// oid/sub claim is the Azure Object ID, not our internal User.Id, so it must be
+    /// looked up via GetCurrentUserQuery rather than parsed directly as a Guid.
     /// </summary>
-    /// <returns>Current user ID</returns>
-    private Guid GetCurrentUserId()
+    /// <returns>Current internal user ID</returns>
+    private async Task<Guid> GetCurrentUserIdAsync()
     {
-        // TODO: Remove this mock user when authentication is enabled
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                         ?? User.FindFirst("sub")?.Value
-                         ?? User.FindFirst("oid")?.Value;
+        var azureObjectId = User.FindFirst("oid")?.Value
+                           ?? User.FindFirst("sub")?.Value
+                           ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
-        if (!string.IsNullOrEmpty(userIdClaim) && Guid.TryParse(userIdClaim, out var userId))
+        if (string.IsNullOrEmpty(azureObjectId))
         {
-            return userId;
+            // Development mode: return Bob Wilson's user ID from seed data
+            _logger.LogInformation("No user authentication found, using mock user for development");
+            return Guid.Parse("2C6D7627-738C-4D39-9644-E7B703332DC5");
         }
 
-        // Development mode: return Bob Wilson's user ID from seed data
-        _logger.LogInformation("No user authentication found, using mock user for development");
-        return Guid.Parse("2C6D7627-738C-4D39-9644-E7B703332DC5");
+        var user = await _sender.Send(new GetCurrentUserQuery { AzureObjectId = azureObjectId });
+        if (user == null)
+        {
+            throw new UnauthorizedAccessException("User is authenticated but has not been initialized. Call POST /api/Users/initialize first.");
+        }
+
+        return user.Id;
     }
 }
