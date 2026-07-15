@@ -64,6 +64,22 @@ export function useApi() {
   return { api }
 }
 
+// Pulls a human-readable message out of either an ApiResponseDto error body
+// ({ message }) or an ASP.NET Core ProblemDetails body ({ detail, errors }),
+// falling back to axios's generic "Request failed with status code N".
+const extractErrorMessage = (err: any): string => {
+  const body = err.response?.data
+
+  if (body?.errors && typeof body.errors === 'object') {
+    const firstField = Object.values(body.errors)[0]
+    if (Array.isArray(firstField) && firstField.length > 0) {
+      return firstField[0]
+    }
+  }
+
+  return body?.detail || body?.message || err.message || 'An error occurred'
+}
+
 // Composable for API requests with loading state
 export function useApiCall<T = any>() {
   const isLoading = ref(false)
@@ -103,7 +119,7 @@ export function useApiCall<T = any>() {
 
       return responseData
     } catch (err: any) {
-      const errorMessage = err.response?.data?.message || err.message || 'An error occurred'
+      const errorMessage = extractErrorMessage(err)
       error.value = errorMessage
 
       if (showErrorNotification) {
@@ -154,14 +170,28 @@ export function useProjectsApi() {
   }
 }
 
+// The API accepts enum query values as their PascalCase C# member names
+// (e.g. "InProgress"), independent of the snake_case used in JSON bodies.
+const toEnumQueryValue = (value: string) =>
+  value.split('_').map(part => part.charAt(0).toUpperCase() + part.slice(1)).join('')
+
+export interface TaskFilters {
+  projectId?: string
+  status?: string
+  priority?: string
+}
+
 export function useTasksApi() {
   const { api } = useApi()
-  
-  const getTasks = (projectId?: string) => {
-    const params = projectId ? { projectId } : {}
+
+  const getTasks = (filters?: TaskFilters) => {
+    const params: Record<string, string> = {}
+    if (filters?.projectId) params.projectId = filters.projectId
+    if (filters?.status) params.status = toEnumQueryValue(filters.status)
+    if (filters?.priority) params.priority = toEnumQueryValue(filters.priority)
     return api.get('/api/Tasks', { params })
   }
-  
+
   const getTask = (id: string) => api.get(`/api/Tasks/${id}`)
   const createTask = (data: any) => api.post('/api/Tasks', data)
   const updateTask = (id: string, data: any) => api.put(`/api/Tasks/${id}`, data)
@@ -193,9 +223,11 @@ export function useUsersApi() {
 
   const initializeUser = () => api.post('/api/Users/initialize')
   const getCurrentUser = () => api.get('/api/Users/me')
+  const getActiveUsers = () => api.get('/api/Users')
 
   return {
     initializeUser,
+    getActiveUsers,
     getCurrentUser
   }
 }

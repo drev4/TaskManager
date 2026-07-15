@@ -57,6 +57,9 @@ export interface Task {
   assignedToUserId?: string
   assignedTo?: User
   dueDate?: Date
+  estimatedHours?: number
+  actualHours?: number
+  tags?: string[]
   createdAt: Date
   updatedAt: Date
   completedAt?: Date
@@ -69,6 +72,8 @@ export interface CreateTaskDto {
   projectId: string
   assignedToUserId?: string
   dueDate?: Date
+  estimatedHours?: number
+  tags?: string[]
 }
 
 export interface UpdateTaskDto {
@@ -78,6 +83,8 @@ export interface UpdateTaskDto {
   priority?: TaskPriority
   assignedToUserId?: string
   dueDate?: Date
+  estimatedHours?: number
+  tags?: string[]
 }
 
 // API Response types

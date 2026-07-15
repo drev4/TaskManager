@@ -7,7 +7,7 @@
     />
 
     <!-- Main content -->
-    <div class="flex flex-col w-0 flex-1 overflow-hidden">
+    <div class="flex flex-col w-0 flex-1 overflow-hidden md:pl-64">
       <!-- Top nav -->
       <AppHeader @toggle-sidebar="sidebarOpen = !sidebarOpen" />
 

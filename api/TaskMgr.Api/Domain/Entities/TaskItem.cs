@@ -111,16 +111,22 @@ public class TaskItem : BaseEntity
     {
         if (!string.IsNullOrWhiteSpace(title))
             Title = title.Trim();
-        
-        Description = description?.Trim();
-        
+
+        if (description != null)
+            Description = description.Trim();
+
         if (priority.HasValue)
             Priority = priority.Value;
-        
-        DueDate = dueDate;
-        EstimatedHours = estimatedHours;
-        Tags = tags?.Trim();
-        
+
+        if (dueDate.HasValue)
+            DueDate = dueDate;
+
+        if (estimatedHours.HasValue)
+            EstimatedHours = estimatedHours;
+
+        if (tags != null)
+            Tags = tags.Trim();
+
         SetUpdated();
     }
     

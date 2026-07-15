@@ -11,6 +11,7 @@ import { onMounted, watch } from 'vue'
 import { useSignalR } from './composables/useSignalR'
 import { useNotification } from './composables/useNotification'
 import { useAuthStore } from './stores/auth'
+import { useNotificationsStore } from './stores/notifications'
 import { useUsersApi } from './composables/useApi'
 import { logger } from './services/logger'
 import { config } from './services/config'
@@ -19,6 +20,7 @@ import ErrorBoundary from './components/ErrorBoundary.vue'
 const { startConnection, stopConnection, on, isConnected } = useSignalR()
 const { showNotification } = useNotification()
 const authStore = useAuthStore()
+const notificationsStore = useNotificationsStore()
 const { initializeUser } = useUsersApi()
 
 // Ensures the internal User row exists for this account before anything that
@@ -60,11 +62,11 @@ const connectRealtime = async () => {
   on('TaskCreated', (task) => {
     logger.info('New Task Created via SignalR:', { task })
 
-    showNotification({
-      title: 'New Task Created',
-      message: `Task "${task.title}" has been created.`,
-      type: 'success'
-    })
+    const title = 'New Task Created'
+    const message = `Task "${task.title}" has been created.`
+
+    showNotification({ title, message, type: 'success' })
+    notificationsStore.add({ title, message, type: 'success' })
   })
 
   logger.info('SignalR event handlers registered')

@@ -33,13 +33,57 @@
       <!-- Right side -->
       <div class="ml-4 flex items-center md:ml-6">
         <!-- Notifications -->
-        <button
-          type="button"
-          class="bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          <span class="sr-only">View notifications</span>
-          <BellIcon class="h-6 w-6" />
-        </button>
+        <Popover as="div" class="relative">
+          <PopoverButton
+            class="relative bg-white p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            @click="notificationsStore.markAllAsRead()"
+          >
+            <span class="sr-only">View notifications</span>
+            <BellIcon class="h-6 w-6" />
+            <span
+              v-if="notificationsStore.unreadCount > 0"
+              class="absolute top-0 right-0 block h-2 w-2 rounded-full bg-red-500 ring-2 ring-white"
+            />
+          </PopoverButton>
+
+          <transition
+            enter-active-class="transition ease-out duration-100"
+            enter-from-class="transform opacity-0 scale-95"
+            enter-to-class="transform opacity-100 scale-100"
+            leave-active-class="transition ease-in duration-75"
+            leave-from-class="transform opacity-100 scale-100"
+            leave-to-class="transform opacity-0 scale-95"
+          >
+            <PopoverPanel class="origin-top-right absolute right-0 mt-2 w-80 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 focus:outline-none">
+              <div class="flex items-center justify-between px-4 py-2 border-b border-gray-200">
+                <h3 class="text-sm font-medium text-gray-900">Notifications</h3>
+                <button
+                  v-if="notificationsStore.items.length > 0"
+                  type="button"
+                  class="text-xs text-gray-500 hover:text-gray-700"
+                  @click="notificationsStore.clear()"
+                >
+                  Clear all
+                </button>
+              </div>
+
+              <div class="max-h-80 overflow-y-auto">
+                <p v-if="notificationsStore.items.length === 0" class="px-4 py-6 text-sm text-gray-500 text-center">
+                  No notifications yet
+                </p>
+                <div
+                  v-for="notification in notificationsStore.items"
+                  :key="notification.id"
+                  class="px-4 py-3 border-b border-gray-100 last:border-b-0"
+                >
+                  <p class="text-sm font-medium text-gray-900">{{ notification.title }}</p>
+                  <p class="text-sm text-gray-500">{{ notification.message }}</p>
+                  <p class="text-xs text-gray-400 mt-1">{{ formatTimestamp(notification.timestamp) }}</p>
+                </div>
+              </div>
+            </PopoverPanel>
+          </transition>
+        </Popover>
 
         <!-- Profile dropdown -->
         <Menu as="div" class="ml-3 relative">
@@ -94,19 +138,24 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Menu, MenuButton, MenuItem, MenuItems } from '@headlessui/vue'
-import { 
-  Bars3Icon, 
-  BellIcon, 
-  MagnifyingGlassIcon 
+import { format } from 'date-fns'
+import { Menu, MenuButton, MenuItem, MenuItems, Popover, PopoverButton, PopoverPanel } from '@headlessui/vue'
+import {
+  Bars3Icon,
+  BellIcon,
+  MagnifyingGlassIcon
 } from '@heroicons/vue/24/outline'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationsStore } from '@/stores/notifications'
 
 defineEmits<{
   'toggle-sidebar': []
 }>()
 
 const authStore = useAuthStore()
+const notificationsStore = useNotificationsStore()
+
+const formatTimestamp = (date: Date) => format(new Date(date), 'MMM d, HH:mm')
 
 const userInitials = computed(() => {
   const user = authStore.currentUser

@@ -133,6 +133,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { format } from 'date-fns'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseInput from '@/components/ui/BaseInput.vue'
@@ -146,6 +147,8 @@ import type { Project, CreateProjectDto } from '@/types'
 import { useProjectsApi, useApiCall } from '@/composables/useApi'
 import { useNotification } from '@/composables/useNotification'
 
+const route = useRoute()
+const router = useRouter()
 const projectsApi = useProjectsApi()
 const { execute: executeGet } = useApiCall<Project[]>()
 const { execute: executeCreate } = useApiCall<Project>()
@@ -215,22 +218,7 @@ const createProject = async () => {
       showSuccess('Project created successfully!')
     }
   } catch (error) {
-    // For development, simulate success
-    const mockProject: Project = {
-      id: Date.now().toString(),
-      name: newProject.value.name,
-      description: newProject.value.description,
-      ownerUserId: 'user1',
-      createdAt: new Date(),
-      updatedAt: new Date(),
-      completedTasksCount: 0,
-      totalTasksCount: 0
-    }
-    
-    projects.value.unshift(mockProject)
-    showCreateModal.value = false
-    newProject.value = { name: '', description: '' }
-    showSuccess('Project created successfully!')
+    // executeCreate already surfaced the real error via a toast; nothing to add here.
   } finally {
     isCreating.value = false
   }
@@ -247,5 +235,10 @@ const getProjectProgress = (project: Project) => {
 
 onMounted(() => {
   loadProjects()
+
+  if (route.query.create === 'true') {
+    showCreateModal.value = true
+    router.replace({ query: {} })
+  }
 })
 </script>

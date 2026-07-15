@@ -8,7 +8,7 @@
           variant="primary"
           size="lg"
           full-width
-          @click="$router.push('/projects/new')"
+          @click="$router.push('/projects?create=true')"
         >
           <PlusIcon class="h-5 w-5 mr-2" />
           Create New Project

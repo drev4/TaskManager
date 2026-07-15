@@ -13,79 +13,28 @@
     <!-- Navigation -->
     <div class="mt-5 flex-grow flex flex-col">
       <nav class="flex-1 px-2 space-y-1">
-        <template v-for="item in navigation" :key="item.name">
-          <RouterLink
-            v-if="!item.children"
-            :to="item.href"
+        <RouterLink
+          v-for="item in navigation"
+          :key="item.name"
+          :to="item.href"
+          :class="[
+            isCurrentRoute(item.href)
+              ? 'bg-blue-100 text-blue-900'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+            'group flex items-center px-2 py-2 text-sm font-medium rounded-md'
+          ]"
+        >
+          <component
+            :is="item.icon"
             :class="[
-              isCurrentRoute(item.href) 
-                ? 'bg-blue-100 text-blue-900' 
-                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
-              'group flex items-center px-2 py-2 text-sm font-medium rounded-md'
+              isCurrentRoute(item.href)
+                ? 'text-blue-500'
+                : 'text-gray-400 group-hover:text-gray-500',
+              'mr-3 flex-shrink-0 h-6 w-6'
             ]"
-          >
-            <component
-              :is="item.icon"
-              :class="[
-                isCurrentRoute(item.href) 
-                  ? 'text-blue-500' 
-                  : 'text-gray-400 group-hover:text-gray-500',
-                'mr-3 flex-shrink-0 h-6 w-6'
-              ]"
-            />
-            {{ item.name }}
-          </RouterLink>
-
-          <!-- Expandable section for children -->
-          <div v-else>
-            <button
-              type="button"
-              :class="[
-                hasActiveChild(item) 
-                  ? 'bg-gray-100 text-gray-900' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
-                'group w-full flex items-center px-2 py-2 text-left text-sm font-medium rounded-md'
-              ]"
-              @click="toggleSection(item.name)"
-            >
-              <component
-                :is="item.icon"
-                :class="[
-                  hasActiveChild(item) 
-                    ? 'text-gray-500' 
-                    : 'text-gray-400 group-hover:text-gray-500',
-                  'mr-3 flex-shrink-0 h-6 w-6'
-                ]"
-              />
-              <span class="flex-1">{{ item.name }}</span>
-              <ChevronRightIcon
-                :class="[
-                  expandedSections.includes(item.name) ? 'rotate-90' : '',
-                  'ml-3 flex-shrink-0 h-5 w-5 text-gray-400 group-hover:text-gray-500 transform transition-transform'
-                ]"
-              />
-            </button>
-
-            <div 
-              v-if="expandedSections.includes(item.name)"
-              class="space-y-1"
-            >
-              <RouterLink
-                v-for="subItem in item.children"
-                :key="subItem.name"
-                :to="subItem.href"
-                :class="[
-                  isCurrentRoute(subItem.href)
-                    ? 'bg-blue-100 text-blue-900'
-                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
-                  'group flex items-center pl-11 pr-2 py-2 text-sm font-medium rounded-md'
-                ]"
-              >
-                {{ subItem.name }}
-              </RouterLink>
-            </div>
-          </div>
-        </template>
+          />
+          {{ item.name }}
+        </RouterLink>
       </nav>
     </div>
 
@@ -111,7 +60,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -119,14 +68,11 @@ import {
   FolderIcon,
   CheckCircleIcon,
   ChartBarIcon,
-  CogIcon,
-  ChevronRightIcon
+  CogIcon
 } from '@heroicons/vue/24/outline'
 
 const route = useRoute()
 const authStore = useAuthStore()
-
-const expandedSections = ref<string[]>(['Projects'])
 
 const navigation = [
   { 
@@ -134,14 +80,10 @@ const navigation = [
     href: '/dashboard', 
     icon: HomeIcon 
   },
-  { 
-    name: 'Projects', 
-    href: '/projects', 
-    icon: FolderIcon,
-    children: [
-      { name: 'All Projects', href: '/projects' },
-      { name: 'Create New', href: '/projects/new' }
-    ]
+  {
+    name: 'Projects',
+    href: '/projects',
+    icon: FolderIcon
   },
   { 
     name: 'Tasks', 
@@ -173,19 +115,5 @@ const userInitials = computed(() => {
 
 const isCurrentRoute = (href: string) => {
   return route.path === href || route.path.startsWith(href + '/')
-}
-
-const hasActiveChild = (item: any) => {
-  if (!item.children) return false
-  return item.children.some((child: any) => isCurrentRoute(child.href))
-}
-
-const toggleSection = (sectionName: string) => {
-  const index = expandedSections.value.indexOf(sectionName)
-  if (index > -1) {
-    expandedSections.value.splice(index, 1)
-  } else {
-    expandedSections.value.push(sectionName)
-  }
 }
 </script>

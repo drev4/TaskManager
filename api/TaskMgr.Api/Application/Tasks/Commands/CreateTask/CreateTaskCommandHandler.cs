@@ -59,7 +59,7 @@ public class CreateTaskCommandHandler : IRequestHandler<CreateTaskCommand, TaskI
             task.SetTags(request.Tags);
 
         // 4. Add Domain Event
-        task.AddDomainEvent(new TaskCreatedEvent(task));
+        task.AddDomainEvent(new TaskCreatedEvent(task, project.OwnerUserId));
 
         // 5. Persist
         await _unitOfWork.Tasks.AddAsync(task, cancellationToken);

@@ -28,7 +28,7 @@ public class CreateProjectCommandValidator : AbstractValidator<CreateProjectComm
             .WithMessage("Color must be a valid hex color code (e.g., #FF0000)");
 
         RuleFor(x => x.DueDate)
-            .GreaterThan(DateTime.UtcNow)
+            .GreaterThanOrEqualTo(DateTime.UtcNow.Date)
             .When(x => x.DueDate.HasValue)
             .WithMessage("Due date must be in the future");
     }

@@ -32,7 +32,7 @@ public class UpdateTaskCommandValidator : AbstractValidator<UpdateTaskCommand>
             .WithMessage("Invalid task priority");
 
         RuleFor(x => x.DueDate)
-            .GreaterThan(DateTime.UtcNow)
+            .GreaterThanOrEqualTo(DateTime.UtcNow.Date)
             .When(x => x.DueDate.HasValue)
             .WithMessage("Due date must be in the future");
 
